@@ -1,24 +1,28 @@
 import time
+import os
 from threading import Event
-from model.task import generate_tasks
+from model.task import generate_tasks, Task
 from model.buffer import Buffer
 from model.processor import Processor
-from config import NUM_PROCESS, PROCESSORS, TIME_STEP, MAX_RUN_TIME, MAX_SIZE_BUFFER, ARRIVAL, NEW_WORK
-import os
+from config import (NUM_PROCESS, NUM_PROCESSORS, TIME_STEP, TIME_SIMULATION, MAX_SIZE_BUFFER,
+                    SERVICE_TIME_TASK, NUM_TASKS, NUM_PRIORITIES, PROBALITIES, LAMBDAS,
+                    ARRIVAL, NEW_WORK, RUNNING, SUCCESS, FAILURE)
 
 class SystemSimulator:
-    def __init__(self, tasks: list, processors: int, buffer: Buffer, time_step: float, max_run_time: float) -> None:
+    def __init__(self, tasks: list, processors: int, buffer: Buffer, time_step: float, time_simulation: float) -> None:
 
         self.num_process = NUM_PROCESS
+        self.time_step = time_step
+        self.time_simulation = time_simulation
+        self.time = 0
+
         self.processors = processors
         self.tasks = tasks
         self.buffer = buffer
-        self.time = 0
-        self.time_step = time_step
-        self.max_run_time = max_run_time
+        self.state = None
         self.running = Event()
 
-    def handle_tasks(self) -> tuple:
+    def handle_tasks(self) -> (str, list):
         if not self.tasks:
             return None, None
 
@@ -37,7 +41,7 @@ class SystemSimulator:
                 self.buffer.add(task)
                 self.tasks.remove(task)
 
-    def handle_buffer(self) -> tuple:
+    def handle_buffer(self) -> (str, list):
         if self.buffer.isEmpty():
             return None, None
 
@@ -49,16 +53,25 @@ class SystemSimulator:
                 if self.buffer.isEmpty():
                     break
 
-        return NEW_WORK, messages
+        return (NEW_WORK, messages) if messages else (None, None)
 
     def request_to_processor(self, new_works: list[tuple]) -> None:
         for work in new_works:
             id_proc, task = work
             self.processors[id_proc].assign_task(task)
 
-    def handle_processors(self) -> None:
+    def handle_processors(self) -> str:
+        alls_free = all(proc.is_free() for proc in self.processors)
+
+        if self.time >= self.time_simulation and not alls_free:
+            return FAILURE
+        if alls_free and self.buffer.isEmpty() and not self.tasks:
+            return SUCCESS
+
         for processor in self.processors:
             processor.work(self.time_step)
+
+        return RUNNING
 
     def work(self) -> None:
         self.time += self.time_step
@@ -70,20 +83,24 @@ class SystemSimulator:
         if state == NEW_WORK:
             self.request_to_processor(new_works)
 
-        self.handle_processors()
+        state_sys = self.handle_processors()
+        self.state = state_sys
 
     def run(self) -> None:
+        self.state = RUNNING
         self.running.set()
 
         while self.running.is_set():
             self.work()
 
-            if self.time >= self.max_run_time:
+            if self.state == FAILURE:
+                print(f"State: {self.state}")
                 print("\nМаксимальное время выполнения истекло. Остановите систему...")
                 self.stop()
                 break
 
-            if not self.tasks and len(self.buffer) == 0 and all(proc.is_free() for proc in self.processors):
+            if self.state == SUCCESS:
+                print(f"State: {self.state}")
                 print("\nБольше никаких задач для выполнения нет. Остановите систему. Симуляция закончилась...")
                 self.stop()
                 break
@@ -96,7 +113,7 @@ class SystemSimulator:
             if not self.state_tasks():
                 print("All tasks active!")
             else:
-                print("List of tasks:")
+                print("***Tasks***")
                 print(self.state_tasks())
             print(self)
 
@@ -110,22 +127,24 @@ class SystemSimulator:
         return str
 
     def __repr__(self) -> str:
-        state = f"Simulation Time: {self.time:.3f}\n"
-        for processor in self.processors:
-            state += f"{processor}\n"
-        state += f"Buffer Size: {len(self.buffer)}\n"
+        state = f"\n***Buffer***\nSize: {len(self.buffer)}\n"
         for entry in self.buffer:
             state += f"{entry}\n"
+        state += f"\n***Processors***\n"
+        for processor in self.processors:
+            state += f"{processor}\n"
+        state += f"\n--------Simulation Time: {self.time:.3f}--------\n"
         return state
 
 
 if __name__ == '__main__':
-    tasks = generate_tasks(5, [0.8, 0.2], [0.5, 1.2])
-    processors = [Processor(i) for i in range(PROCESSORS)]
+    tasks = generate_tasks(num_tasks=NUM_TASKS, num_priorities=NUM_PRIORITIES, service_time=SERVICE_TIME_TASK,
+                           probabilities=PROBALITIES, lambdas=LAMBDAS)
+    processors = [Processor(i) for i in range(NUM_PROCESSORS)]
     buffer = Buffer(max_size=MAX_SIZE_BUFFER)
 
     simulator = SystemSimulator(tasks=tasks, processors=processors, buffer=buffer,
-                                time_step=TIME_STEP, max_run_time=MAX_RUN_TIME)
+                                time_step=TIME_STEP, time_simulation=TIME_SIMULATION)
 
     try:
         simulator.run()

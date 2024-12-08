@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from config import PROBALITIES, LAMBDAS, NUM_PRIORITIES, TIME_QUANTUM, NUM_TASKS, PROCESSORS, COEFF_ROUND
+from config import PROBALITIES, LAMBDAS, NUM_PRIORITIES, SERVICE_TIME_TASK, NUM_TASKS, COEFF_ROUND
 
 
 class Task:
@@ -30,13 +30,13 @@ def generate_hyperexponential_times(probabilities, lambdas):
 
     return round(np.random.exponential(1 / lambdas[component_index]), COEFF_ROUND)
 
-def generate_tasks(num_tasks, probabilities, lambdas):
-    return [Task(id=i, priority=np.random.randint(1, NUM_PRIORITIES + 1),
+def generate_tasks(num_tasks, num_priorities, service_time, probabilities, lambdas):
+    return [Task(id=i, priority=np.random.randint(1, num_priorities + 1),
                  arrival_time=generate_hyperexponential_times(probabilities, lambdas),
-                 service_time=TIME_QUANTUM) for i in range(num_tasks)]
+                 service_time=service_time) for i in range(num_tasks)]
 
 if __name__ == '__main__':
-    tasks = generate_tasks(NUM_TASKS, PROBALITIES, LAMBDAS)
+    tasks = generate_tasks(NUM_TASKS, NUM_PRIORITIES, SERVICE_TIME_TASK, PROBALITIES, LAMBDAS)
     for task in tasks:
         print(task)
 

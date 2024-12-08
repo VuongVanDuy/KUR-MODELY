@@ -3,7 +3,8 @@ from threading import Event
 from model.task import Task, generate_tasks
 from model.buffer import Buffer
 from model.processor import Processor
-from config import NUM_PROCESS, PROCESSORS, TIME_STEP, MAX_RUN_TIME
+from config import (NUM_PROCESS, NUM_PROCESSORS, TIME_STEP, TIME_SIMULATION, MAX_SIZE_BUFFER,
+                    SERVICE_TIME_TASK, NUM_TASKS, NUM_PRIORITIES, PROBALITIES, LAMBDAS)
 import os
 
 class SystemSimulator:
@@ -12,7 +13,7 @@ class SystemSimulator:
         self.num_process = NUM_PROCESS
         self.processors = [Processor(i) for i in range(num_processors)]
         self.tasks = tasks
-        self.buffer = Buffer(max_size=10)
+        self.buffer = Buffer(max_size=MAX_SIZE_BUFFER)
         self.time = 0
         self.time_step = time_step
         self.max_run_time = max_run_time
@@ -94,10 +95,10 @@ class SystemSimulator:
 
 
 if __name__ == '__main__':
-    tasks = generate_tasks(5, [0.8, 0.2], [0.5, 1.2])
+    tasks = generate_tasks(NUM_TASKS, NUM_PRIORITIES, SERVICE_TIME_TASK, PROBALITIES, LAMBDAS)
 
-    simulator = SystemSimulator(tasks=tasks, num_processors=PROCESSORS,
-                                time_step=TIME_STEP, max_run_time=MAX_RUN_TIME)
+    simulator = SystemSimulator(tasks=tasks, num_processors=NUM_PROCESSORS,
+                                time_step=TIME_STEP, max_run_time=TIME_SIMULATION)
 
     try:
         simulator.run()
