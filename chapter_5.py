@@ -1,17 +1,20 @@
 import time
 import os
 from threading import Event
+
+from select import select
+
 from model.task import generate_tasks, Task
 from model.buffer import Buffer
 from model.processor import Processor
 from config import (NUM_PROCESS, NUM_PROCESSORS, TIME_STEP, TIME_SIMULATION, MAX_SIZE_BUFFER,
                     SERVICE_TIME_TASK, NUM_TASKS, NUM_PRIORITIES, PROBALITIES, LAMBDAS,
-                    ARRIVAL, NEW_WORK, RUNNING, SUCCESS, FAILURE)
+                    ARRIVAL, NEW_WORK, INTERRUPT, RUNNING, SUCCESS, FAILURE)
 
 class SystemSimulator:
-    def __init__(self, tasks: list, processors: int, buffer: Buffer, time_step: float, time_simulation: float) -> None:
+    def __init__(self, tasks: list, processors: int, buffer: Buffer, num_process: int, time_step: float, time_simulation: float) -> None:
 
-        self.num_process = NUM_PROCESS
+        self.num_process = num_process
         self.time_step = time_step
         self.time_simulation = time_simulation
         self.time = 0
@@ -19,9 +22,11 @@ class SystemSimulator:
         self.processors = processors
         self.tasks = tasks
         self.buffer = buffer
+        self.interrup = []
         self.reject = {"tasks": [],
                        "num": 0,
                        "status": ""}
+
         self.state = None
         self.running = Event()
 
@@ -39,7 +44,6 @@ class SystemSimulator:
         return (ARRIVAL, tasks_to_add) if tasks_to_add else (None, None)
 
     def request_to_buffer(self, tasks_to_add: list):
-        str = ""
         for task in tasks_to_add:
             if len(self.buffer) < self.buffer.max_size:
                 self.buffer.add(task)
@@ -53,33 +57,54 @@ class SystemSimulator:
                 self.reject["status"] += f"Buffer overflow. Task {task.id} rejected! (in {self.time} s)\n"
                 tasks_to_add.remove(task)
                 self.tasks.remove(task)
-        #status = str if str else "Success!"
 
     def handle_buffer(self) -> (str, list):
         if self.buffer.isEmpty():
             return None, None
 
-        messages = []
-        for id_proc, processor in enumerate(self.processors):
-            if processor.is_free():
+        processors_free = [proc for proc in self.processors if proc.is_free()]
+        if not processors_free:
+            task = self.buffer.get()
+            return INTERRUPT, task
+        else:
+            new_works = []
+            for processor in processors_free:
                 task = self.buffer.get()
-                messages.append((id_proc, task))
+                new_works.append((processor.id, task))
                 if self.buffer.isEmpty():
                     break
-
-        return (NEW_WORK, messages) if messages else (None, None)
+            return NEW_WORK, new_works
 
     def request_to_processor(self, new_works: list[tuple]) -> None:
         for work in new_works:
             id_proc, task = work
             self.processors[id_proc].assign_task(task)
 
+    def request_to_interrupt(self, task: Task) -> None:
+        self.interrup.append(task)
+        self.interrup.sort(key=lambda x: x.priority, reverse=True)
+
+    def handle_interrupt(self) -> None:
+        tasks_on_proc = [(proc.get_task(), proc.id) for proc in self.processors if not proc.is_free()]
+        tasks_on_proc.sort(key=lambda x: x[0].priority, reverse=True)
+        while self.interrup:
+            task = self.interrup.pop(0)
+            state = False
+            for task_on_proc, proc_id in tasks_on_proc:
+                if task.priority > task_on_proc.priority:
+                    self.processors[proc_id].assign_task(task)
+                    tasks_on_proc.remove((task_on_proc, proc_id))
+                    state = True
+                    break
+            if not state:
+                self.buffer.add(task)
+
     def handle_processors(self) -> str:
         alls_free = all(proc.is_free() for proc in self.processors)
 
         if self.time >= self.time_simulation and not alls_free:
             return FAILURE
-        if alls_free and self.buffer.isEmpty() and not self.tasks:
+        elif alls_free and self.buffer.isEmpty() and not self.tasks:
             return SUCCESS
 
         for processor in self.processors:
@@ -96,7 +121,10 @@ class SystemSimulator:
         state, new_works = self.handle_buffer()
         if state == NEW_WORK:
             self.request_to_processor(new_works)
+        elif state == INTERRUPT:
+            self.request_to_interrupt(new_works)
 
+        self.handle_interrupt()
         state_sys = self.handle_processors()
         self.state = state_sys
 
@@ -146,15 +174,17 @@ class SystemSimulator:
 
     def __repr__(self) -> str:
         state = ""
-        #if self.reject["signal"] != "Success!" and self.reject["signal"]:
         if self.reject["status"]:
             state += f"***Status reject***\n{self.reject['status']}\n"
+
         state += f"\n***Buffer***\nMax size: {self.buffer.max_size}\nSize: {len(self.buffer)}\n"
         for entry in self.buffer:
             state += f"{entry}\n"
+
         state += f"\n***Processors***\n"
         for processor in self.processors:
             state += f"{processor}\n"
+
         state += f"\n--------Simulation Time: {self.time:.3f}--------\n"
         return state
 
@@ -165,7 +195,7 @@ if __name__ == '__main__':
     processors = [Processor(i) for i in range(NUM_PROCESSORS)]
     buffer = Buffer(max_size=MAX_SIZE_BUFFER)
 
-    simulator = SystemSimulator(tasks=tasks, processors=processors, buffer=buffer,
+    simulator = SystemSimulator(tasks=tasks, processors=processors, buffer=buffer, num_process=NUM_PROCESS,
                                 time_step=TIME_STEP, time_simulation=TIME_SIMULATION)
 
     try:

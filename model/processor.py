@@ -24,8 +24,8 @@ class Processor:
     def is_free(self) -> bool:
         return self.current_task is None
 
-    # def get_task(self) -> Task:
-    #     return self.current_task
+    def get_task(self) -> Task:
+        return self.current_task
     #
     # def get_time_left(self) -> float:
     #     return self.time_left
