@@ -1,9 +1,6 @@
 import time
 import os
 from threading import Event
-
-from select import select
-
 from model.task import generate_tasks, Task
 from model.buffer import Buffer
 from model.processor import Processor
