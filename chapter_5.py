@@ -19,6 +19,9 @@ class SystemSimulator:
         self.processors = processors
         self.tasks = tasks
         self.buffer = buffer
+        self.reject = {"tasks": [],
+                       "num": 0,
+                       "status": ""}
         self.state = None
         self.running = Event()
 
@@ -35,11 +38,22 @@ class SystemSimulator:
 
         return (ARRIVAL, tasks_to_add) if tasks_to_add else (None, None)
 
-    def request_to_buffer(self, tasks_to_add: list) -> None:
+    def request_to_buffer(self, tasks_to_add: list):
+        str = ""
         for task in tasks_to_add:
             if len(self.buffer) < self.buffer.max_size:
                 self.buffer.add(task)
+                tasks_to_add.remove(task)
                 self.tasks.remove(task)
+
+        if tasks_to_add:
+            for task in tasks_to_add:
+                self.reject["tasks"].append(task.id)
+                self.reject["num"] += 1
+                self.reject["status"] += f"Buffer overflow. Task {task.id} rejected! (in {self.time} s)\n"
+                tasks_to_add.remove(task)
+                self.tasks.remove(task)
+        #status = str if str else "Success!"
 
     def handle_buffer(self) -> (str, list):
         if self.buffer.isEmpty():
@@ -74,7 +88,7 @@ class SystemSimulator:
         return RUNNING
 
     def work(self) -> None:
-        self.time += self.time_step
+        self.time = round(self.time + self.time_step, 2)
         state, tasks_to_add = self.handle_tasks()
         if state == ARRIVAL:
             self.request_to_buffer(tasks_to_add)
@@ -91,17 +105,21 @@ class SystemSimulator:
         self.running.set()
 
         while self.running.is_set():
+            #self.reject["signal"] = None
             self.work()
 
             if self.state == FAILURE:
                 print(f"State: {self.state}")
                 print("\nМаксимальное время выполнения истекло. Остановите систему...")
+                status = "Num tasks rejected: " + str(self.reject["num"]) + "\n"
+                print(status)
                 self.stop()
                 break
 
             if self.state == SUCCESS:
                 print(f"State: {self.state}")
                 print("\nБольше никаких задач для выполнения нет. Остановите систему. Симуляция закончилась...")
+                status = "Num tasks rejected: " + str(self.reject["num"]) + "\n"
                 self.stop()
                 break
 
@@ -127,7 +145,11 @@ class SystemSimulator:
         return str
 
     def __repr__(self) -> str:
-        state = f"\n***Buffer***\nSize: {len(self.buffer)}\n"
+        state = ""
+        #if self.reject["signal"] != "Success!" and self.reject["signal"]:
+        if self.reject["status"]:
+            state += f"***Status reject***\n{self.reject['status']}\n"
+        state += f"\n***Buffer***\nMax size: {self.buffer.max_size}\nSize: {len(self.buffer)}\n"
         for entry in self.buffer:
             state += f"{entry}\n"
         state += f"\n***Processors***\n"
