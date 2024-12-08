@@ -22,7 +22,7 @@ class SystemSimulator:
         self.processors = processors
         self.tasks = tasks
         self.buffer = buffer
-        self.interrup = []
+        self.interrupt = []
         self.reject = {"tasks": [],
                        "num": 0,
                        "status": ""}
@@ -81,14 +81,14 @@ class SystemSimulator:
             self.processors[id_proc].assign_task(task)
 
     def request_to_interrupt(self, task: Task) -> None:
-        self.interrup.append(task)
-        self.interrup.sort(key=lambda x: x.priority, reverse=True)
+        self.interrupt.append(task)
+        self.interrupt.sort(key=lambda x: x.priority, reverse=True)
 
     def handle_interrupt(self) -> None:
         tasks_on_proc = [(proc.get_task(), proc.id) for proc in self.processors if not proc.is_free()]
         tasks_on_proc.sort(key=lambda x: x[0].priority, reverse=True)
-        while self.interrup:
-            task = self.interrup.pop(0)
+        while self.interrupt:
+            task = self.interrupt.pop(0)
             state = False
             for task_on_proc, proc_id in tasks_on_proc:
                 if task.priority > task_on_proc.priority:
