@@ -105,7 +105,6 @@ class SystemSimulator:
         self.running.set()
 
         while self.running.is_set():
-            #self.reject["signal"] = None
             self.work()
 
             if self.state == FAILURE:
@@ -120,6 +119,7 @@ class SystemSimulator:
                 print(f"State: {self.state}")
                 print("\nБольше никаких задач для выполнения нет. Остановите систему. Симуляция закончилась...")
                 status = "Num tasks rejected: " + str(self.reject["num"]) + "\n"
+                print(status)
                 self.stop()
                 break
 
